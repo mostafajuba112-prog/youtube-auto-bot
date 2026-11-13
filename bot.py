@@ -1,7 +1,8 @@
 os.environ["IMAGEIO_FFMPEG_EXE"] = "ffmpeg"
 import os
+import asyncio
 import google.genai as genai
-from gtts import gTTS
+import edge_tts
 from moviepy.editor import AudioFileClip, ColorClip, TextClip, CompositeVideoClip
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -13,6 +14,12 @@ if not api_key:
     raise ValueError("GEMINI_API_KEY is not set!")
 
 client = genai.Client(api_key=api_key)
+
+async def generate_edge_audio(text, output_file):
+    # استخدام صوت ذكاء اصطناعي سينمائي فخم
+    voice = "ar-EG-ShakirNeural"
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(output_file)
 
 def upload_video_to_youtube(video_path, title, description):
     client_id = os.environ.get("YOUTUBE_CLIENT_ID")
@@ -67,26 +74,24 @@ def main():
     script_text = response.text
     print(script_text)
 
-    print("--- 2. Generating Audio ---")
+    print("--- 2. Generating Cinematic Audio (Edge-TTS) ---")
     audio_file = "reel_audio.mp3"
-    tts = gTTS(text=script_text, lang='ar')
-    tts.save(audio_file)
+    asyncio.run(generate_edge_audio(script_text, audio_file))
 
     print("--- 3. Rendering Video with Text & Background ---")
     audio = AudioFileClip(audio_file)
     
-    # خلفية سينمائية داكنة (لون رمادي غامق فخم)
+    # خلفية سينمائية داكنة
     bg_clip = ColorClip(size=(1080, 1920), color=(20, 24, 33), duration=audio.duration)
     
-    # إضافة اسم القناة كعلامة تجارية ثابتة أعلى الفيديو
+    # اسم القناة كعلامة تجارية
     try:
         watermark = TextClip("غير قابل للحل", fontsize=50, color='gold', font="Arial")
         watermark = watermark.set_position(('center', 150)).set_duration(audio.duration)
     except:
         watermark = None
 
-    # إضافة نص القصة في منتصف الفيديو
-    # ملاحظة: في بيئة لينكس الافتراضية لجيثب، نستخدم النص الداعم
+    # نص القصة في المنتصف
     try:
         txt_clip = TextClip(script_text, fontsize=60, color='white', size=(900, None), method='caption', align='center', font="Arial")
         txt_clip = txt_clip.set_position('center').set_duration(audio.duration)
@@ -94,7 +99,6 @@ def main():
         print(f"Text rendering note: {e}")
         txt_clip = None
 
-    # تجميع عناصر الفيديو معاً
     clips_list = [bg_clip]
     if watermark:
         clips_list.append(watermark)
