@@ -1,5 +1,6 @@
 import os
 import asyncio
+import re
 
 # ضبط إعدادات الـ Ffmpeg لتعمل تلقائياً داخل بيئة لينكس
 os.environ["IMAGEIO_FFMPEG_EXE"] = "ffmpeg"
@@ -18,8 +19,15 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
+def clean_text_for_speech(text):
+    # إزالة النجوم (الماركداون) والرموز والإيموجي التي تجعل الـ TTS ينطق كلمات غريبة مثل "نجمة"
+    text = re.sub(r'[\*\#\_`~•]', '', text)
+    # الاحتفاظ فقط بالحروف العربية والإنجليزية والأرقام وعلامات الترقيم الأساسية
+    text = re.sub(r'[^\w\s\u0600-\u06FF\.,،؟!\-]', ' ', text)
+    return text.strip()
+
 async def generate_edge_audio(text, output_file):
-    voice = "ar-EG-ShakirNeural"
+    voice = "ar-SA-HamedNeural"  # صوت سعودي عميق وفخم جداً للغموض والتشويق
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_file)
 
@@ -68,17 +76,21 @@ def upload_video_to_youtube(video_path, title, description):
 
 def main():
     print("--- 1. Generating Mystery Script ---")
-    prompt = "اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 25 كلمة) باللغة العربية مع عنوان جذاب ومناسب لفيديوهات الريلز القصيرة."
+    prompt = "اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 25 كلمة) باللغة العربية بدون أي رموز أو علامات تزيين، مناسبة لفيديوهات الريلز."
     response = client.models.generate_content(
         model='gemini-2.5-flash',
         contents=prompt,
     )
-    script_text = response.text
-    print(script_text)
+    raw_script_text = response.text
+    print("Raw Script:", raw_script_text)
+
+    # تنظيف النص تماماً من أي رموز أو نجوم قد يقرأها الصوت بشكل خاطئ
+    speech_text = clean_text_for_speech(raw_script_text)
+    print("Cleaned Speech Text:", speech_text)
 
     print("--- 2. Generating Cinematic Audio (Edge-TTS) ---")
     audio_file = "reel_audio.mp3"
-    asyncio.run(generate_edge_audio(script_text, audio_file))
+    asyncio.run(generate_edge_audio(speech_text, audio_file))
 
     print("--- 3. Rendering Video with Text & Background ---")
     audio = AudioFileClip(audio_file)
@@ -93,9 +105,9 @@ def main():
     except:
         watermark = None
 
-    # نص القصة في المنتصف
+    # نص القصة في المنتصف (نعرض النص النظيف بدون رموز)
     try:
-        txt_clip = TextClip(script_text, fontsize=60, color='white', size=(900, None), method='caption', align='center', font="Arial")
+        txt_clip = TextClip(speech_text, fontsize=60, color='white', size=(900, None), method='caption', align='center', font="Arial")
         txt_clip = txt_clip.set_position('center').set_duration(audio.duration)
     except Exception as e:
         print(f"Text rendering note: {e}")
@@ -114,7 +126,7 @@ def main():
 
     print("--- 4. Uploading to YouTube with Trending Hashtags ---")
     trending_hashtags = "\n\n#shorts #قصص_غموض #اكسبلور #رعب #غموض #مجهول #trending #viral #غير_قابل_للحل"
-    full_description = script_text + trending_hashtags
+    full_description = raw_script_text + trending_hashtags
 
     upload_video_to_youtube(
         output_filename, 
