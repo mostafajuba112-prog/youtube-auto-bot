@@ -1,7 +1,8 @@
+os.environ["IMAGEIO_FFMPEG_EXE"] = "ffmpeg"
 import os
 import google.genai as genai
 from gtts import gTTS
-from moviepy.editor import AudioFileClip, ColorClip
+from moviepy.editor import AudioFileClip, ColorClip, TextClip, CompositeVideoClip
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
@@ -14,7 +15,6 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 def upload_video_to_youtube(video_path, title, description):
-    # سحب المفاتيح بأمان من بيئة جيثب
     client_id = os.environ.get("YOUTUBE_CLIENT_ID")
     client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET")
     refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN")
@@ -33,7 +33,7 @@ def upload_video_to_youtube(video_path, title, description):
         'snippet': {
             'title': title,
             'description': description,
-            'tags': ['قصص غموض', 'shorts', 'ريلز'],
+            'tags': ['قصص غموض', 'shorts', 'ريلز', 'غير قابل للحل'],
             'categoryId': '24'
         },
         'status': {
@@ -59,7 +59,7 @@ def upload_video_to_youtube(video_path, title, description):
 
 def main():
     print("--- 1. Generating Mystery Script ---")
-    prompt = "اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 30 كلمة) باللغة العربية مع عنوان جذاب ومناسب لفيديوهات الريلز القصيرة."
+    prompt = "اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 25 كلمة) باللغة العربية مع عنوان جذاب ومناسب لفيديوهات الريلز القصيرة."
     response = client.models.generate_content(
         model='gemini-2.5-flash',
         contents=prompt,
@@ -72,16 +72,42 @@ def main():
     tts = gTTS(text=script_text, lang='ar')
     tts.save(audio_file)
 
-    print("--- 3. Rendering Video ---")
+    print("--- 3. Rendering Video with Text & Background ---")
     audio = AudioFileClip(audio_file)
-    video = ColorClip(size=(1080, 1920), color=(15, 15, 15), duration=audio.duration)
-    final_video = video.set_audio(audio)
+    
+    # خلفية سينمائية داكنة (لون رمادي غامق فخم)
+    bg_clip = ColorClip(size=(1080, 1920), color=(20, 24, 33), duration=audio.duration)
+    
+    # إضافة اسم القناة كعلامة تجارية ثابتة أعلى الفيديو
+    try:
+        watermark = TextClip("غير قابل للحل", fontsize=50, color='gold', font="Arial")
+        watermark = watermark.set_position(('center', 150)).set_duration(audio.duration)
+    except:
+        watermark = None
+
+    # إضافة نص القصة في منتصف الفيديو
+    # ملاحظة: في بيئة لينكس الافتراضية لجيثب، نستخدم النص الداعم
+    try:
+        txt_clip = TextClip(script_text, fontsize=60, color='white', size=(900, None), method='caption', align='center', font="Arial")
+        txt_clip = txt_clip.set_position('center').set_duration(audio.duration)
+    except Exception as e:
+        print(f"Text rendering note: {e}")
+        txt_clip = None
+
+    # تجميع عناصر الفيديو معاً
+    clips_list = [bg_clip]
+    if watermark:
+        clips_list.append(watermark)
+    if txt_clip:
+        clips_list.append(txt_clip)
+
+    final_video = CompositeVideoClip(clips_list).set_audio(audio)
     
     output_filename = "final_reel.mp4"
     final_video.write_videofile(output_filename, fps=24, codec="libx264", audio_codec="aac")
 
     print("--- 4. Uploading to YouTube ---")
-    upload_video_to_youtube(output_filename, "قصة غموض قصيرة 🔍✨", script_text)
+    upload_video_to_youtube(output_filename, "قصة غموض قصيرة 🔍✨ | غير قابل للحل", script_text)
 
 if __name__ == "__main__":
     main()
