@@ -1,5 +1,5 @@
 google-genai
-gtts
+edge-tts
 moviepy
 pillow
 google-api-python-client
