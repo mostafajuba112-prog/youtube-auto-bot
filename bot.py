@@ -1,47 +1,87 @@
 import os
-from google import genai
+import google.genai as genai
 from gtts import gTTS
 from moviepy.editor import AudioFileClip, ColorClip
-
-# (مكتبات رفع يوتيوب اللي هنفعلها بربط المفاتيح)
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
+# 1. إعدادات مفتاح جيميني
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
     raise ValueError("GEMINI_API_KEY is not set!")
 
 client = genai.Client(api_key=api_key)
 
-def build_and_upload_reel():
-    # 1. توليد قصة غموض قصيرة
-    prompt = "اكتب قصة غموض قصيرة جداً (في حدود 30 كلمة) ومثيرة ومناسبة لفيديوهات الريلز القصيرة باللغة العربية مع عنوان جذاب."
+def upload_video_to_youtube(video_path, title, description):
+    # سحب المفاتيح بأمان من بيئة جيثب
+    client_id = os.environ.get("YOUTUBE_CLIENT_ID")
+    client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET")
+    refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN")
+
+    creds = Credentials(
+        token=None,
+        refresh_token=refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=client_secret
+    )
+
+    youtube = build('youtube', 'v3', credentials=creds)
+
+    body = {
+        'snippet': {
+            'title': title,
+            'description': description,
+            'tags': ['قصص غموض', 'shorts', 'ريلز'],
+            'categoryId': '24'
+        },
+        'status': {
+            'privacyStatus': 'public',
+            'selfDeclaredMadeForKids': False
+        }
+    }
+
+    media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
+    request = youtube.videos().insert(
+        part='snippet,status',
+        body=body,
+        media_body=media
+    )
+
+    response = None
+    while response is None:
+        status, response = request.next_chunk()
+        if status:
+            print(f"Uploaded {int(status.progress() * 100)}%.")
+
+    print(f"Video uploaded successfully! ID: {response.get('id')}")
+
+def main():
+    print("--- 1. Generating Mystery Script ---")
+    prompt = "اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 30 كلمة) باللغة العربية مع عنوان جذاب ومناسب لفيديوهات الريلز القصيرة."
     response = client.models.generate_content(
         model='gemini-2.5-flash',
         contents=prompt,
     )
     script_text = response.text
-    print("--- 1. Script Generated ---")
+    print(script_text)
 
-    # 2. تحويل النص لصوت
+    print("--- 2. Generating Audio ---")
     audio_file = "reel_audio.mp3"
     tts = gTTS(text=script_text, lang='ar')
     tts.save(audio_file)
-    print("--- 2. Audio Generated ---")
 
-    # 3. بناء الفيديو المرئي (mp4)
-    print("--- 3. Building Video ---")
-    audio_clip = AudioFileClip(audio_file)
-    video_clip = ColorClip(size=(1080, 1920), color=(15, 15, 15), duration=audio_clip.duration)
-    final_clip = video_clip.set_audio(audio_clip)
+    print("--- 3. Rendering Video ---")
+    audio = AudioFileClip(audio_file)
+    video = ColorClip(size=(1080, 1920), color=(15, 15, 15), duration=audio.duration)
+    final_video = video.set_audio(audio)
     
-    output_video = "final_reel.mp4"
-    final_clip.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac")
-    print(f"--- 4. Video Created: {output_video} ---")
+    output_filename = "final_reel.mp4"
+    final_video.write_videofile(output_filename, fps=24, codec="libx264", audio_codec="aac")
 
-    # 4. خطوة الرفع على يوتيوب (هتشتغل بمجرد ربط مفاتيح الأمان في GitHub Secrets)
-    # youtube_upload(output_video, script_text[:50])
+    print("--- 4. Uploading to YouTube ---")
+    upload_video_to_youtube(output_filename, "قصة غموض قصيرة 🔍✨", script_text)
 
 if __name__ == "__main__":
-    build_and_upload_vault = build_and_upload_reel()
+    main()
