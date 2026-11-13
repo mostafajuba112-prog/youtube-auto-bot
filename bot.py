@@ -1,31 +1,37 @@
 import os
 import google.genai as genai
+from google.genai import types
 
-# إعدادات مفتاح جيميني
+# تأكد إن المفتاح متعرّف
 api_key = os.environ.get("GEMINI_API_KEY")
-if not api_key:
-    raise ValueError("GEMINI_API_KEY is not set!")
-
 client = genai.Client(api_key=api_key)
 
-def generate_google_audio(text, output_file):
-    print("--- Generating Audio via Google AI ---")
-    # نطلب من النموذج توليد محتوى صوتي مباشر بالنبرة المطلوبة
+def generate_google_ai_speech(text, output_file):
+    print("--- Generating Cinematic Voice via Google AI Studio ---")
+    
+    # طلب توليد الصوت من نموذج جيميني مع تحديد نبرة وصوت عميق (مثل Fenrir أو Puck)
     response = client.models.generate_content(
         model='gemini-2.5-flash',
-        contents=f"اقرأ هذه القصة بصوت تعليقي رجالي عميق، فخم، ومناسب لأفلام الغموض والرعب والتشويق، وبدون أي مقدمات، فقط اقرأ النص التالي: {text}",
-        config={
-            "response_mime_type": "audio/mp3",
-        }
+        contents=f"اقرأ النص التالي بصوت تعليقي رجالي عميق جداً، فخم، وبطيء، ومناسب تماماً لأفلام الرعب والغموض والتحقيقات، بدون أي مقدمات أو إضافات، اقرأ النص فقط: {text}",
+        config=types.GenerateContentConfig(
+            response_modalities=["AUDIO"],
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                        voice_name="Fenrir" # صوت رجالي عميق وقوي يناسب الغموض
+                    )
+                )
+            )
+        )
     )
     
-    # حفظ الملف الصوتي الناتج مباشرة
-    # ملاحظة: البيانات الصوتية بتيجي في أجزاء الـ inline_data الخاصة بالرد
-    for part in response.candidates[0].content.parts:
-        if part.inline_data and part.inline_data.data:
-            with open(output_file, "wb") as f:
-                f.write(part.inline_data.data)
-            print(f"Audio saved successfully to {output_file}")
-            return
-            
-    raise Exception("Failed to generate audio from Google AI.")
+    # استخراج ملف الصوت الناتج وحفظه بصيغة MP3
+    for candidate in response.candidates:
+        for part in candidate.content.parts:
+            if part.inline_data and part.inline_data.data:
+                with open(output_file, "wb") as f:
+                    f.write(part.inline_data.data)
+                print(f"Audio successfully generated and saved to {output_file}")
+                return True
+                
+    raise Exception("Failed to generate audio from Google AI Studio.")
