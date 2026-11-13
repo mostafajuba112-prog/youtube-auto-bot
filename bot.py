@@ -1,12 +1,15 @@
-os.environ["IMAGEIO_FFMPEG_EXE"] = "ffmpeg"
 import os
 import asyncio
+
+# ضبط إعدادات الـ Ffmpeg لتعمل تلقائياً داخل بيئة لينكس
+os.environ["IMAGEIO_FFMPEG_EXE"] = "ffmpeg"
+
 import google.genai as genai
 import edge_tts
 from moviepy.editor import AudioFileClip, ColorClip, TextClip, CompositeVideoClip
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from google.oauth2.credentials import Credentials
+from google.oauth2.credentials:: Credentials
 
 # 1. إعدادات مفتاح جيميني
 api_key = os.environ.get("GEMINI_API_KEY")
@@ -16,7 +19,6 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 async def generate_edge_audio(text, output_file):
-    # استخدام صوت ذكاء اصطناعي سينمائي فخم
     voice = "ar-EG-ShakirNeural"
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_file)
