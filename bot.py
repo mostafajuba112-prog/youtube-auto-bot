@@ -9,7 +9,7 @@ import edge_tts
 from moviepy.editor import AudioFileClip, ColorClip, TextClip, CompositeVideoClip
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from google.oauth2.credentials:: Credentials
+from google.oauth2.credentials import Credentials
 
 # 1. إعدادات مفتاح جيميني
 api_key = os.environ.get("GEMINI_API_KEY")
@@ -42,7 +42,7 @@ def upload_video_to_youtube(video_path, title, description):
         'snippet': {
             'title': title,
             'description': description,
-            'tags': ['قصص غموض', 'shorts', 'ريلز', 'غير قابل للحل'],
+            'tags': ['قصص غموض', 'shorts', 'ريلز', 'غير قابل للحل', 'اكسبلور', 'رعب'],
             'categoryId': '24'
         },
         'status': {
@@ -112,8 +112,15 @@ def main():
     output_filename = "final_reel.mp4"
     final_video.write_videofile(output_filename, fps=24, codec="libx264", audio_codec="aac")
 
-    print("--- 4. Uploading to YouTube ---")
-    upload_video_to_youtube(output_filename, "قصة غموض قصيرة 🔍✨ | غير قابل للحل", script_text)
+    print("--- 4. Uploading to YouTube with Trending Hashtags ---")
+    trending_hashtags = "\n\n#shorts #قصص_غموض #اكسبلور #رعب #غموض #مجهول #trending #viral #غير_قابل_للحل"
+    full_description = script_text + trending_hashtags
+
+    upload_video_to_youtube(
+        output_filename, 
+        "قصة غموض قصيره 🔍✨ | غير قابل للحل", 
+        full_description
+    )
 
 if __name__ == "__main__":
     main()
