@@ -8,7 +8,7 @@ os.environ["IMAGEIO_FFMPEG_EXE"] = "ffmpeg"
 
 import google.genai as genai
 from google.genai import types
-from moviepy.editor import ImageClip, AudioFileClip, TextClip, CompositeVideoClip
+from moviepy.editor import ImageClip, AudioFileClip, TextClip, CompositeVideoClip, concatenate_videoclips, ColorClip
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
@@ -117,12 +117,16 @@ def main():
     print("--- Starting Automated Mystery Short Production ---")
     os.makedirs("auto_images", exist_ok=True)
 
-    print("--- 1. Generating Script & Visual Prompt ---")
+    print("--- 1. Generating Script & 5 Visual Prompts ---")
     prompt = """
-    اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 25 كلمة) باللغة العربية.
-    وأعطني الرد بالشكل التالي بالضبط:
+    اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 40 كلمة) باللغة العربية.
+    وأعطني الرد بالشكل التالي بالضبط بدون أي زيادة:
     SCRIPT: [النص الصوتي للقصة هنا]
-    PROMPT1: [برومبت بالإنجليزية لصورة خلفية سينمائية معبرة]
+    PROMPT1: [برومبت بالإنجليزية للمشهد الأول]
+    PROMPT2: [برومبت بالإنجليزية للمشهد الثاني]
+    PROMPT3: [برومبت بالإنجليزية للمشهد الثالث]
+    PROMPT4: [برومبت بالإنجليزية للمشهد الرابع]
+    PROMPT5: [برومبت بالإنجليزية للمشهد الخامس]
     """
     response = client.models.generate_content(
         model='gemini-2.5-flash',
@@ -131,11 +135,19 @@ def main():
     raw_response = response.text
     print("AI Response:\n", raw_response)
 
-    script_match = re.search(r'SCRIPT:\s*(.*?)(?=PROMPT1:|$)', raw_response, re.DOTALL)
-    p1_match = re.search(r'PROMPT1:\s*(.*)', raw_response, re.DOTALL)
+    script_match = re.search(r'SCRIPT:\s*(.*?)(?=(?:PROMPT1:|$))', raw_response, re.DOTALL)
+    p1_match = re.search(r'PROMPT1:\s*(.*?)(?=(?:PROMPT2:|$))', raw_response, re.DOTALL)
+    p2_match = re.search(r'PROMPT2:\s*(.*?)(?=(?:PROMPT3:|$))', raw_response, re.DOTALL)
+    p3_match = re.search(r'PROMPT3:\s*(.*?)(?=(?:PROMPT4:|$))', raw_response, re.DOTALL)
+    p4_match = re.search(r'PROMPT4:\s*(.*?)(?=(?:PROMPT5:|$))', raw_response, re.DOTALL)
+    p5_match = re.search(r'PROMPT5:\s*(.*)', raw_response, re.DOTALL)
 
     raw_script = script_match.group(1).strip() if script_match else raw_response
-    p1_text = p1_match.group(1).strip() if p1_match else "Dark mysterious thriller scene, 8k"
+    p1_text = p1_match.group(1).strip() if p1_match else "Dark mysterious thriller scene 1, 8k"
+    p2_text = p2_match.group(1).strip() if p2_match else "Dark mysterious thriller scene 2, 8k"
+    p3_text = p3_match.group(1).strip() if p3_match else "Dark mysterious thriller scene 3, 8k"
+    p4_text = p4_match.group(1).strip() if p4_match else "Dark mysterious thriller scene 4, 8k"
+    p5_text = p5_match.group(1).strip() if p5_match else "Dark mysterious thriller scene 5, 8k"
 
     speech_text = clean_text_for_speech(raw_script)
 
@@ -143,20 +155,40 @@ def main():
     audio_file = "reel_audio.mp3"
     generate_google_ai_speech(speech_text, audio_file)
 
-    print("--- 3. Generating AI Image ---")
-    img_path = "auto_images/scene_1.jpg"
-    success = generate_ai_image(p1_text, img_path)
+    print("--- 3. Generating 5 AI Images ---")
+    img1_path = "auto_images/scene_1.jpg"
+    img2_path = "auto_images/scene_2.jpg"
+    img3_path = "auto_images/scene_3.jpg"
+    img4_path = "auto_images/scene_4.jpg"
+    img5_path = "auto_images/scene_5.jpg"
 
-    print("--- 4. Assembling Video with MoviePy ---")
+    generate_ai_image(p1_text, img1_path)
+    generate_ai_image(p2_text, img2_path)
+    generate_ai_image(p3_text, img3_path)
+    generate_ai_image(p4_text, img4_path)
+    generate_ai_image(p5_text, img5_path)
+
+    print("--- 4. Assembling Video with 5 Dynamic Images ---")
     audio = AudioFileClip(audio_file)
     total_duration = audio.duration
+    scene_duration = total_duration / 5.0
 
-    if success and os.path.exists(img_path):
-        bg_clip = ImageClip(img_path).set_duration(total_duration).resize(width=1080)
-        if bg_clip.h < 1920:
-            bg_clip = bg_clip.resize(height=1920)
-    else:
-        bg_clip = ColorClip(size=(1080, 1920), color=(20, 24, 33), duration=total_duration)
+    def make_vertical_clip(path, dur):
+        if os.path.exists(path):
+            clip = ImageClip(path).set_duration(dur).resize(width=1080)
+            if clip.h < 1920:
+                clip = clip.resize(height=1920)
+            return clip
+        else:
+            return ColorClip(size=(1080, 1920), color=(20, 24, 33), duration=dur)
+
+    c1 = make_vertical_clip(img1_path, scene_duration)
+    c2 = make_vertical_clip(img2_path, scene_duration)
+    c3 = make_vertical_clip(img3_path, scene_duration)
+    c4 = make_vertical_clip(img4_path, scene_duration)
+    c5 = make_vertical_clip(img5_path, scene_duration + (total_duration - (scene_duration * 5)))
+
+    bg_clip = concatenate_videoclips([c1, c2, c3, c4, c5])
 
     try:
         watermark = TextClip("غير قابل للحل", fontsize=50, color='gold', font="Arial")
@@ -191,12 +223,4 @@ def main():
         full_description
     )
 
-    print("--- 6. Cleaning Up Temporary Files ---")
-    for f in [audio_file, output_filename, img_path]:
-        if os.path.exists(f):
-            os.remove(f)
-
-    print("--- Automated Pipeline Completed Successfully! ---")
-
-if __name__ == "__main__":
-    main()
+    print("
