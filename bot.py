@@ -27,9 +27,7 @@ def clean_text_for_speech(text):
 
 async def generate_edge_speech(text, output_file):
     print("--- Generating Cinematic Voice via Edge TTS ---")
-    # استخدام صوت عربي رجالي عميق وفخم
     voice = "ar-EG-ShakirNeural"
-    # تقليل الطبقة (Pitch) ليكون الصوت أعنف وأكثر غموضاً يناسب قصص الرعب
     communicate = edge_tts.Communicate(text, voice, rate="+0%", pitch="-10Hz")
     await communicate.save(output_file)
     print(f"Audio saved to {output_file}")
@@ -39,8 +37,8 @@ def generate_ai_image(prompt, output_path):
     try:
         result = client.models.generate_images(
             model='imagen-3.0-generate-002',
-            prompt=prompt + ", vertical 9:16 aspect ratio, dark cinematic thriller style, 8k",
-            config=dict(
+            prompt=prompt + ", vertical 9:16 aspect ratio, dark cinematic thriller style, 8k, highly detailed",
+            config=types.GenerateImagesConfig(
                 number_of_images=1,
                 output_mime_type="image/jpeg",
                 aspect_ratio="9:16",
@@ -48,8 +46,10 @@ def generate_ai_image(prompt, output_path):
         )
         for generated_image in result.generated_images:
             image = Image.open(BytesIO(generated_image.image.image_bytes))
+            # التأكد من أن مقاس الصورة رأسى تماماً 1080x1920
+            image = image.resize((1080, 1920), Image.Resampling.LANCZOS)
             image.save(output_path)
-            print(f"Image saved to {output_path}")
+            print(f"AI Image successfully generated and saved to {output_path}")
             return True
     except Exception as e:
         print(f"Image generation error: {e}")
@@ -107,13 +107,12 @@ def main():
     اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 40 كلمة) باللغة العربية.
     وأعطني الرد بالشكل التالي بالضبط بدون أي زيادة:
     SCRIPT: [النص الصوتي للقصة هنا]
-    PROMPT1: [برومبت بالإنجليزية للمشهد الأول]
-    PROMPT2: [برومبت بالإنجليزية للمشهد الثاني]
-    PROMPT3: [برومبت بالإنجليزية للمشهد الثالث]
-    PROMPT4: [برومبت بالإنجليزية للمشهد الرابع]
-    PROMPT5: [برومبت بالإنجليزية للمشهد الخامس]
+    PROMPT1: [برومبت بالإنجليزية دقيق للمشهد الأول يعبر عن بداية القصة]
+    PROMPT2: [برومبت بالإنجليزية دقيق للمشهد الثاني يعبر عن تطور الأحداث]
+    PROMPT3: [برومبت بالإنجليزية دقيق للمشهد الثالث يعبر عن ذروة الغموض]
+    PROMPT4: [برومبت بالإنجليزية دقيق للمشهد الرابع يعبر عن الاكتشاف]
+    PROMPT5: [برومبت بالإنجليزية دقيق للمشهد الخامس يعبر عن النهاية المفاجئة]
     """
-    # استخدام gemini-2.5-flash لكتابة القصة والبرومبتات بأعلى كفاءة وثبات
     response = client.models.generate_content(
         model='gemini-2.5-flash',
         contents=prompt,
@@ -121,7 +120,7 @@ def main():
     raw_response = response.text
     print("AI Response:\n", raw_response)
 
-    script_match = re.search(r'SCRIPT:\s*(.*?)(?=(?:PROMPT1:|$))', raw_response, re.DOTALL)
+    script_match = re.search(r'SCRIPT:\s*(.*?)(?=(?:PROMPT1:|$))', raw_response, raw_dotall := re.DOTALL)
     p1_match = re.search(r'PROMPT1:\s*(.*?)(?=(?:PROMPT2:|$))', raw_response, re.DOTALL)
     p2_match = re.search(r'PROMPT2:\s*(.*?)(?=(?:PROMPT3:|$))', raw_response, re.DOTALL)
     p3_match = re.search(r'PROMPT3:\s*(.*?)(?=(?:PROMPT4:|$))', raw_response, re.DOTALL)
@@ -141,7 +140,7 @@ def main():
     audio_file = "reel_audio.mp3"
     asyncio.run(generate_edge_speech(speech_text, audio_file))
 
-    print("--- 3. Generating 5 AI Images ---")
+    print("--- 3. Generating 5 AI Images and Saving to auto_images/ ---")
     img1_path = "auto_images/scene_1.jpg"
     img2_path = "auto_images/scene_2.jpg"
     img3_path = "auto_images/scene_3.jpg"
@@ -154,19 +153,18 @@ def main():
     generate_ai_image(p4_text, img4_path)
     generate_ai_image(p5_text, img5_path)
 
-    print("--- 4. Assembling Video with 5 Dynamic Images ---")
+    print("--- 4. Assembling Video by Loading Images from auto_images/ ---")
     audio = AudioFileClip(audio_file)
     total_duration = audio.duration
     scene_duration = total_duration / 5.0
 
     def make_vertical_clip(path, dur):
-        if os.path.exists(path):
-            clip = ImageClip(path).set_duration(dur).resize(width=1080)
-            if clip.h < 1920:
-                clip = clip.resize(height=1920)
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            clip = ImageClip(path).set_duration(dur)
             return clip
         else:
-            return ColorClip(size=(1080, 1920), color=(20, 24, 33), duration=dur)
+            # احتياطي لو صورة فشل توليدها لأي سبب، يعطي لون غامق مشيك بدلاً من كراش
+            return ColorClip(size=(1080, 1920), color=(15, 18, 25), duration=dur)
 
     c1 = make_vertical_clip(img1_path, scene_duration)
     c2 = make_vertical_clip(img2_path, scene_duration)
