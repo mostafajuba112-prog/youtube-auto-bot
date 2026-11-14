@@ -26,9 +26,9 @@ def clean_text_for_speech(text):
 
 def generate_google_ai_speech(text, output_file):
     print("--- Generating Cinematic Voice via Google AI Studio ---")
-    # تم تصحيح الموديل هنا ليدعم الصوت بنجاح
+    # تم التحديث إلى الموديل الجديد المطلوب من جوجل
     response = client.models.generate_content(
-        model='gemini-2.0-flash',
+        model='gemini-3.8-flash',
         contents=f"اقرأ النص التالي بصوت تعليقي رجالي عميق جداً، فخم، وبطيء، ومناسب تماماً لأفلام الرعب والغموض والتحقيقات، بدون أي مقدمات أو إضافات، اقرأ النص فقط: {text}",
         config=types.GenerateContentConfig(
             response_modalities=["AUDIO"],
