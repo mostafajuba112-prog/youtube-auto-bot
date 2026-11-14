@@ -12,6 +12,7 @@ from moviepy.editor import ImageClip, AudioFileClip, TextClip, CompositeVideoCli
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
+import edge_tts
 
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
@@ -24,31 +25,14 @@ def clean_text_for_speech(text):
     text = re.sub(r'[^\w\s\u0600-\u06FF\.,،؟!\-]', ' ', text)
     return text.strip()
 
-def generate_google_ai_speech(text, output_file):
-    print("--- Generating Cinematic Voice via Google AI Studio ---")
-    # تم التحديث إلى الموديل الجديد المطلوب من جوجل
-    response = client.models.generate_content(
-        model='gemini-3.8-flash',
-        contents=f"اقرأ النص التالي بصوت تعليقي رجالي عميق جداً، فخم، وبطيء، ومناسب تماماً لأفلام الرعب والغموض والتحقيقات، بدون أي مقدمات أو إضافات، اقرأ النص فقط: {text}",
-        config=types.GenerateContentConfig(
-            response_modalities=["AUDIO"],
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name="Fenrir"
-                    )
-                )
-            )
-        )
-    )
-    for candidate in response.candidates:
-        for part in candidate.content.parts:
-            if part.inline_data and part.inline_data.data:
-                with open(output_file, "wb") as f:
-                    f.write(part.inline_data.data)
-                print(f"Audio saved to {output_file}")
-                return True
-    raise Exception("Failed to generate audio from Google AI Studio.")
+async def generate_edge_speech(text, output_file):
+    print("--- Generating Cinematic Voice via Edge TTS ---")
+    # استخدام صوت عربي رجالي عميق وفخم
+    voice = "ar-EG-ShakirNeural"
+    # تقليل الطبقة (Pitch) ليكون الصوت أعنف وأكثر غموضاً يناسب قصص الرعب
+    communicate = edge_tts.Communicate(text, voice, rate="+0%", pitch="-10Hz")
+    await communicate.save(output_file)
+    print(f"Audio saved to {output_file}")
 
 def generate_ai_image(prompt, output_path):
     print(f"Generating AI image for prompt: {prompt}")
@@ -129,6 +113,7 @@ def main():
     PROMPT4: [برومبت بالإنجليزية للمشهد الرابع]
     PROMPT5: [برومبت بالإنجليزية للمشهد الخامس]
     """
+    # استخدام gemini-2.5-flash لكتابة القصة والبرومبتات بأعلى كفاءة وثبات
     response = client.models.generate_content(
         model='gemini-2.5-flash',
         contents=prompt,
@@ -152,9 +137,9 @@ def main():
 
     speech_text = clean_text_for_speech(raw_script)
 
-    print("--- 2. Generating Cinematic Voice via Google AI Studio ---")
+    print("--- 2. Generating Cinematic Voice via Edge TTS ---")
     audio_file = "reel_audio.mp3"
-    generate_google_ai_speech(speech_text, audio_file)
+    asyncio.run(generate_edge_speech(speech_text, audio_file))
 
     print("--- 3. Generating 5 AI Images ---")
     img1_path = "auto_images/scene_1.jpg"
