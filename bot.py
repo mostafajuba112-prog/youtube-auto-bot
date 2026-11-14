@@ -223,4 +223,12 @@ def main():
         full_description
     )
 
-    print("
+    print("--- 6. Cleaning Up Temporary Files ---")
+    for f in [audio_file, output_filename, img1_path, img2_path, img3_path, img4_path, img5_path]:
+        if os.path.exists(f):
+            os.remove(f)
+
+    print("--- Automated Pipeline Completed Successfully! ---")
+
+if __name__ == "__main__":
+    main()
