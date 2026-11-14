@@ -1,14 +1,15 @@
 import os
 import asyncio
 import re
+import random
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFilter
 
 os.environ["IMAGEIO_FFMPEG_EXE"] = "ffmpeg"
 
 import google.genai as genai
 from google.genai import types
-from moviepy.editor import ImageClip, AudioFileClip, TextClip, CompositeVideoClip, concatenate_videoclips, ColorClip
+from moviepy.editor import ImageClip, AudioFileClip, TextClip, CompositeVideoClip, concatenate_videoclips
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
@@ -32,28 +33,26 @@ async def generate_edge_speech(text, output_file):
     await communicate.save(output_file)
     print(f"Audio saved to {output_file}")
 
-def generate_ai_image(prompt, output_path):
-    print(f"Generating AI image for prompt: {prompt}")
-    try:
-        result = client.models.generate_images(
-            model='imagen-3.0-generate-002',
-            prompt=prompt + ", vertical 9:16 aspect ratio, dark cinematic thriller style, 8k, highly detailed",
-            config=types.GenerateImagesConfig(
-                number_of_images=1,
-                output_mime_type="image/jpeg",
-                aspect_ratio="9:16",
-            )
-        )
-        for generated_image in result.generated_images:
-            image = Image.open(BytesIO(generated_image.image.image_bytes))
-            # التأكد من أن مقاس الصورة رأسى تماماً 1080x1920
-            image = image.resize((1080, 1920), Image.Resampling.LANCZOS)
-            image.save(output_path)
-            print(f"AI Image successfully generated and saved to {output_path}")
-            return True
-    except Exception as e:
-        print(f"Image generation error: {e}")
-    return False
+def generate_cinematic_background(output_path, index):
+    print(f"Generating professional cinematic background for scene {index}...")
+    # إنشاء لوحة رأسية مقاس ريلز 9:16 بألوان داكنة وغامضة
+    img = Image.new('RGB', (1080, 1920), color=(10, 13, 18))
+    draw = ImageDraw.Draw(img)
+    
+    # رسم تأثيرات ضوئية وتدرجات سينمائية عشوائية تمنح طابع الغموض
+    for _ in range(20):
+        x1 = random.randint(-300, 1100)
+        y1 = random.randint(-300, 1700)
+        x2 = x1 + random.randint(400, 900)
+        y2 = y1 + random.randint(400, 900)
+        # ألوان تميل للأزرق الداكن والرمادي والبنفسجي الخافت لأجواء الجريمة والتحقيق
+        color = (random.randint(10, 35), random.randint(15, 40), random.randint(45, 95))
+        draw.ellipse([x1, y1, x2, y2], fill=color)
+        
+    # دمج وتنعيم المؤثرات لتخرج بصورة سينمائية احترافية ناعمة
+    img = img.filter(ImageFilter.GaussianBlur(90))
+    img.save(output_path)
+    print(f"Cinematic background saved to {output_path}")
 
 def upload_video_to_youtube(video_path, title, description):
     client_id = os.environ.get("YOUTUBE_CLIENT_ID")
@@ -102,69 +101,41 @@ def main():
     print("--- Starting Automated Mystery Short Production ---")
     os.makedirs("auto_images", exist_ok=True)
 
-    print("--- 1. Generating Script & 5 Visual Prompts ---")
-    prompt = """
-    اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 40 كلمة) باللغة العربية.
-    وأعطني الرد بالشكل التالي بالضبط بدون أي زيادة:
-    SCRIPT: [النص الصوتي للقصة هنا]
-    PROMPT1: [برومبت بالإنجليزية دقيق للمشهد الأول يعبر عن بداية القصة]
-    PROMPT2: [برومبت بالإنجليزية دقيق للمشهد الثاني يعبر عن تطور الأحداث]
-    PROMPT3: [برومبت بالإنجليزية دقيق للمشهد الثالث يعبر عن ذروة الغموض]
-    PROMPT4: [برومبت بالإنجليزية دقيق للمشهد الرابع يعبر عن الاكتشاف]
-    PROMPT5: [برومبت بالإنجليزية دقيق للمشهد الخامس يعبر عن النهاية المفاجئة]
-    """
+    print("--- 1. Generating Mystery Script via Gemini ---")
+    prompt = "اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 40 كلمة) باللغة العربية للتعليق الصوتي فقط بدون أي عناوين أو مقدمات."
     response = client.models.generate_content(
         model='gemini-2.5-flash',
         contents=prompt,
     )
-    raw_response = response.text
-    print("AI Response:\n", raw_response)
-
-    script_match = re.search(r'SCRIPT:\s*(.*?)(?=(?:PROMPT1:|$))', raw_response, raw_dotall := re.DOTALL)
-    p1_match = re.search(r'PROMPT1:\s*(.*?)(?=(?:PROMPT2:|$))', raw_response, re.DOTALL)
-    p2_match = re.search(r'PROMPT2:\s*(.*?)(?=(?:PROMPT3:|$))', raw_response, re.DOTALL)
-    p3_match = re.search(r'PROMPT3:\s*(.*?)(?=(?:PROMPT4:|$))', raw_response, re.DOTALL)
-    p4_match = re.search(r'PROMPT4:\s*(.*?)(?=(?:PROMPT5:|$))', raw_response, re.DOTALL)
-    p5_match = re.search(r'PROMPT5:\s*(.*)', raw_response, re.DOTALL)
-
-    raw_script = script_match.group(1).strip() if script_match else raw_response
-    p1_text = p1_match.group(1).strip() if p1_match else "Dark mysterious thriller scene 1, 8k"
-    p2_text = p2_match.group(1).strip() if p2_match else "Dark mysterious thriller scene 2, 8k"
-    p3_text = p3_match.group(1).strip() if p3_match else "Dark mysterious thriller scene 3, 8k"
-    p4_text = p4_match.group(1).strip() if p4_match else "Dark mysterious thriller scene 4, 8k"
-    p5_text = p5_match.group(1).strip() if p5_match else "Dark mysterious thriller scene 5, 8k"
-
+    raw_script = response.text.strip()
     speech_text = clean_text_for_speech(raw_script)
 
     print("--- 2. Generating Cinematic Voice via Edge TTS ---")
     audio_file = "reel_audio.mp3"
     asyncio.run(generate_edge_speech(speech_text, audio_file))
 
-    print("--- 3. Generating 5 AI Images and Saving to auto_images/ ---")
+    print("--- 3. Generating 5 Cinematic Visual Scenes Locally ---")
     img1_path = "auto_images/scene_1.jpg"
     img2_path = "auto_images/scene_2.jpg"
     img3_path = "auto_images/scene_3.jpg"
     img4_path = "auto_images/scene_4.jpg"
     img5_path = "auto_images/scene_5.jpg"
 
-    generate_ai_image(p1_text, img1_path)
-    generate_ai_image(p2_text, img2_path)
-    generate_ai_image(p3_text, img3_path)
-    generate_ai_image(p4_text, img4_path)
-    generate_ai_image(p5_text, img5_path)
+    generate_cinematic_background(img1_path, 1)
+    generate_cinematic_background(img2_path, 2)
+    generate_cinematic_background(img3_path, 3)
+    generate_cinematic_background(img4_path, 4)
+    generate_cinematic_background(img5_path, 5)
 
-    print("--- 4. Assembling Video by Loading Images from auto_images/ ---")
+    print("--- 4. Assembling Video with 5 Dynamic Scenes ---")
     audio = AudioFileClip(audio_file)
     total_duration = audio.duration
     scene_duration = total_duration / 5.0
 
     def make_vertical_clip(path, dur):
-        if os.path.exists(path) and os.path.getsize(path) > 0:
-            clip = ImageClip(path).set_duration(dur)
-            return clip
-        else:
-            # احتياطي لو صورة فشل توليدها لأي سبب، يعطي لون غامق مشيك بدلاً من كراش
-            return ColorClip(size=(1080, 1920), color=(15, 18, 25), duration=dur)
+        if os.path.exists(path):
+            return ImageClip(path).set_duration(dur)
+        return ImageClip(img1_path).set_duration(dur)
 
     c1 = make_vertical_clip(img1_path, scene_duration)
     c2 = make_vertical_clip(img2_path, scene_duration)
