@@ -35,10 +35,24 @@ def clean_text_for_speech(text):
 
 async def generate_edge_speech(text, output_file):
     print("--- Generating Clean Cinematic Voice via Edge TTS ---")
+    text = text.strip()
+    if not text:
+        raise ValueError("النص المراد تحويله لصوت فارغ تماماً!")
+    
     voice = "ar-EG-ShakirNeural"
-    communicate = edge_tts.Communicate(text, voice, rate="+0%", pitch="-2Hz")
-    await communicate.save(output_file)
-    print(f"Audio saved to {output_file}")
+    
+    # إضافة آلية إعادة المحاولة (Retry) لتجنب أخطاء انقطاع الاتصال المؤقتة
+    for attempt in range(3):
+        try:
+            communicate = edge_tts.Communicate(text, voice, rate="+0%", pitch="-2Hz")
+            await communicate.save(output_file)
+            print(f"Audio saved successfully to {output_file}")
+            return
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed with error: {e}")
+            if attempt == 2:
+                raise
+            await asyncio.sleep(4)
 
 
 def generate_story_image(prompt_text, output_path, scene_num):
