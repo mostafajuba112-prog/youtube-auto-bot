@@ -3,5 +3,5 @@ google-api-python-client
 google-auth
 pillow
 moviepy==1.0.3
-edge-tts
+edge-tts>=6.5.0
 requests
