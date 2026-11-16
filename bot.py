@@ -13,6 +13,7 @@ from PIL import Image
 os.environ["IMAGEIO_FFMPEG_EXE"] = "ffmpeg"
 
 import google.genai as genai
+from google.genai import types
 from moviepy.editor import (
     ImageClip, AudioFileClip, TextClip, CompositeVideoClip,
     concatenate_videoclips, ColorClip,
@@ -31,7 +32,6 @@ client = genai.Client(api_key=api_key)
 
 def clean_text_for_speech(text):
     text = html.unescape(text)
-    # تنظيف شامل لإزالة الرموز، الإيموجي، وعلامات الترقيم غير المسموحة في edge-tts
     text = re.sub(r'[\*\#\_`~•\U00010000-\U0010ffff]', '', text)
     text = re.sub(r'[^\w\s\u0600-\u06FF\.,،؟!\-]', ' ', text)
     text = re.sub(r'\s+', ' ', text)
@@ -44,7 +44,6 @@ async def generate_edge_speech(text, output_file):
     if not text:
         raise ValueError("النص المراد تحويله لصوت فارغ تماماً!")
     
-    # تجربة أصوات متعددة لتلافي أي حظر أو فشل مؤقت في سيرفرات مايكروسوفت
     voices = ["ar-EG-ShakirNeural", "ar-SA-ZariyahNeural", "ar-JO-SanaNeural"]
     
     for attempt in range(3):
