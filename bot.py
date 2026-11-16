@@ -4,6 +4,7 @@ import re
 import time
 import urllib.parse
 from io import BytesIO
+import html
 
 import requests
 from PIL import Image
@@ -28,8 +29,11 @@ client = genai.Client(api_key=api_key)
 
 
 def clean_text_for_speech(text):
-    text = re.sub(r'[\*\#\_`~•]', '', text)
+    text = html.unescape(text)
+    # تنظيف شامل لإزالة الرموز، الإيموجي، وعلامات الترقيم غير المسموحة في edge-tts
+    text = re.sub(r'[\*\#\_`~•\U00010000-\U0010ffff]', '', text)
     text = re.sub(r'[^\w\s\u0600-\u06FF\.,،؟!\-]', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
 
@@ -39,20 +43,24 @@ async def generate_edge_speech(text, output_file):
     if not text:
         raise ValueError("النص المراد تحويله لصوت فارغ تماماً!")
     
-    voice = "ar-EG-ShakirNeural"
+    # تجربة أصوات متعددة لتلافي أي حظر أو فشل مؤقت في سيرفرات مايكروسوفت
+    voices = ["ar-EG-ShakirNeural", "ar-SA-ZariyahNeural", "ar-JO-SanaNeural"]
     
-    # إضافة آلية إعادة المحاولة (Retry) لتجنب أخطاء انقطاع الاتصال المؤقتة
     for attempt in range(3):
-        try:
-            communicate = edge_tts.Communicate(text, voice, rate="+0%", pitch="-2Hz")
-            await communicate.save(output_file)
-            print(f"Audio saved successfully to {output_file}")
-            return
-        except Exception as e:
-            print(f"Attempt {attempt + 1} failed with error: {e}")
-            if attempt == 2:
-                raise
-            await asyncio.sleep(4)
+        for voice in voices:
+            try:
+                print(f"Trying voice {voice} (Attempt {attempt + 1})...")
+                communicate = edge_tts.Communicate(text, voice, rate="+0%", pitch="-2Hz")
+                await communicate.save(output_file)
+                if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                    print(f"Audio saved successfully using {voice} to {output_file}")
+                    return
+            except Exception as e:
+                print(f"Voice {voice} failed with error: {e}")
+        
+        if attempt == 2:
+            raise edge_tts.exceptions.NoAudioReceived("No audio was received from all Edge TTS voices after multiple attempts.")
+        await asyncio.sleep(4)
 
 
 def generate_story_image(prompt_text, output_path, scene_num):
@@ -130,7 +138,6 @@ def upload_video_to_youtube(video_path, title, description):
 
 
 def make_vertical_clip(path, dur, fallback=None):
-    """Use the scene image; if missing, reuse the last good image instead of black."""
     use = None
     if os.path.exists(path) and os.path.getsize(path) > 0:
         use = path
@@ -149,7 +156,7 @@ def main():
     print("--- 1. Generating Script & 5 Scene Prompts ---")
     prompt = """
     اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 40 كلمة) باللغة العربية.
-    وأعطني الرد بالشكل التالي بالضبط بدون أي زيادات:
+    وأعطني الرد بالشكل التالي بالضبط بدون أي زيادات أو إيموجي:
     SCRIPT: [النص الصوتي للقصة هنا]
     PROMPT1: [برومبت بالإنجليزية دقيق للمشهد الأول]
     PROMPT2: [برومبت بالإنجليزية دقيق للمشهد الثاني]
@@ -192,7 +199,7 @@ def main():
     for i, (p, path) in enumerate(zip(prompts, img_paths), start=1):
         if generate_story_image(p, path, i):
             ok_count += 1
-        time.sleep(8)  # avoid rate limit between requests
+        time.sleep(8)
     print(f"Images generated: {ok_count}/5")
 
     print("--- 4. Assembling Video with Story Images ---")
@@ -200,7 +207,6 @@ def main():
     total_duration = audio.duration
     scene_duration = total_duration / 5.0
 
-    # first image that actually exists, used as fallback for failed scenes
     fallback = next(
         (p for p in img_paths if os.path.exists(p) and os.path.getsize(p) > 0),
         None,
