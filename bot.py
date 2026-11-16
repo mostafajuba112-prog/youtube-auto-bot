@@ -5,6 +5,7 @@ import time
 import urllib.parse
 from io import BytesIO
 import html
+import random
 
 import requests
 from PIL import Image
@@ -112,7 +113,7 @@ def upload_video_to_youtube(video_path, title, description):
         'snippet': {
             'title': title,
             'description': description,
-            'tags': ['قصص غموض', 'shorts', 'ريلز', 'غير قابل للحل', 'اكسبلور', 'رعب'],
+            'tags': ['shorts', 'ريلز', 'غير قابل للحل', 'اكسبلور', 'منوعات', 'حقائق', 'أسرار'],
             'categoryId': '24',
         },
         'status': {
@@ -150,40 +151,49 @@ def make_vertical_clip(path, dur, fallback=None):
 
 
 def main():
-    print("--- Starting Automated Mystery Short Production ---")
+    print("--- Starting Automated Diverse Short Production ---")
     os.makedirs("auto_images", exist_ok=True)
 
-    print("--- 1. Generating Script & 5 Scene Prompts ---")
+    print("--- 1. Generating Open Script & 5 Scene Prompts ---")
     prompt = """
-    اكتب قصة غموض قصيرة جداً ومثيرة (في حدود 40 كلمة) باللغة العربية.
-    وأعطني الرد بالشكل التالي بالضبط بدون أي زيادات أو إيموجي:
-    SCRIPT: [النص الصوتي للقصة هنا]
-    PROMPT1: [برومبت بالإنجليزية دقيق للمشهد الأول]
+    أنت كاتب محتوى إبداعي مبهر لقناة يوتيوب. اختر فكرة واحدة مشوقة ومذهلة جداً في أي مجال في الوجود (قصة غموض، حقيقة علمية صادمة، سر تاريخي، غرائب كونية، اختراع غير العالم، أو معضلة مرعبة).
+    اجعل النص في حدود 40 إلى 50 كلمة باللغة العربية الفصحى وبدون إيموجي.
+    وأعطني الرد بالشكل التالي بالضبط بدون أي زيادات:
+    TITLE: [عنوان جذاب للريلز مع إيموجي واحد مناسب]
+    SCRIPT: [النص الصوتي للقصة أو الحقيقة هنا]
+    PROMPT1: [برومبت بالإنجليزية دقيق للمشهد الأول سينمائي واقعي]
     PROMPT2: [برومبت بالإنجليزية دقيق للمشهد الثاني]
     PROMPT3: [برومبت بالإنجليزية دقيق للمشهد الثالث]
     PROMPT4: [برومبت بالإنجليزية دقيق للمشهد الرابع]
     PROMPT5: [برومبت بالإنجليزية دقيق للمشهد الخامس]
+    HASHTAGS: [اكتب بالضبط 50 هاشتاج دقيق ومترابط مع الموضوع مفصولة بمسافات]
     """
     response = client.models.generate_content(
         model='gemini-2.5-flash',
         contents=prompt,
+        config=types.GenerateContentConfig(temperature=1.0)
     )
     raw_response = response.text
     print("AI Response:\n", raw_response)
 
+    title_match = re.search(r'TITLE:\s*(.*?)(?=(?:SCRIPT:|$))', raw_response, re.DOTALL)
     script_match = re.search(r'SCRIPT:\s*(.*?)(?=(?:PROMPT1:|$))', raw_response, re.DOTALL)
     p1_match = re.search(r'PROMPT1:\s*(.*?)(?=(?:PROMPT2:|$))', raw_response, re.DOTALL)
     p2_match = re.search(r'PROMPT2:\s*(.*?)(?=(?:PROMPT3:|$))', raw_response, re.DOTALL)
     p3_match = re.search(r'PROMPT3:\s*(.*?)(?=(?:PROMPT4:|$))', raw_response, re.DOTALL)
     p4_match = re.search(r'PROMPT4:\s*(.*?)(?=(?:PROMPT5:|$))', raw_response, re.DOTALL)
-    p5_match = re.search(r'PROMPT5:\s*(.*)', raw_response, re.DOTALL)
+    p5_match = re.search(r'PROMPT5:\s*(.*?)(?=(?:HASHTAGS:|$))', raw_response, re.DOTALL)
+    hash_match = re.search(r'HASHTAGS:\s*(.*)', raw_response, re.DOTALL)
 
+    video_title = title_match.group(1).strip() if title_match else "حقيقة مذهلة لا تصدق! 🔍"
     raw_script = script_match.group(1).strip() if script_match else raw_response
-    p1_text = p1_match.group(1).strip() if p1_match else "Dark mysterious crime scene"
-    p2_text = p2_match.group(1).strip() if p2_match else "Detective looking at clues in dark room"
-    p3_text = p3_match.group(1).strip() if p3_match else "Suspicious old house at night"
-    p4_text = p4_match.group(1).strip() if p4_match else "Secret diary with mysterious symbols"
-    p5_text = p5_match.group(1).strip() if p5_match else "Dark thriller suspense ending shadow"
+    p1_text = p1_match.group(1).strip() if p1_match else "Cinematic mysterious scene"
+    p2_text = p2_match.group(1).strip() if p2_match else "Dramatic detailed shot"
+    p3_text = p3_match.group(1).strip() if p3_match else "Suspenseful atmosphere view"
+    p4_text = p4_match.group(1).strip() if p4_match else "Deep historical or scientific background"
+    p5_text = p5_match.group(1).strip() if p5_match else "Thriller dramatic ending shadow"
+    
+    extracted_hashtags = hash_match.group(1).strip() if hash_match else "#shorts #اكسبلور #رعب #غموض #مجهول #trending #viral #غير_قابل_للحل #قصص #معلومات #حقائق"
 
     speech_text = clean_text_for_speech(raw_script)
 
@@ -249,12 +259,11 @@ def main():
     )
 
     print("--- 5. Uploading to YouTube ---")
-    trending_hashtags = "\n\n#shorts #قصص_غموض #اكسبلور #رعب #غموض #مجهول #trending #viral #غير_قابل_للحل"
-    full_description = speech_text + trending_hashtags
+    full_description = speech_text + "\n\n" + extracted_hashtags
 
     upload_video_to_youtube(
         output_filename,
-        "لغز جديد 🔍✨ | غير قابل للحل",
+        video_title[:95],
         full_description,
     )
 
